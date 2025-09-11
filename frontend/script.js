@@ -7,7 +7,6 @@ const STORAGE_KEY = "zenGarden_v1";
 // DOM
 const canvas = document.getElementById("garden");
 const ctx = canvas.getContext("2d", { willReadFrequently: false });
-const btnSaveLocal = document.getElementById("saveLocal");
 const btnClear = document.getElementById("clear");
 const btnRandom = document.getElementById("randomize");
 const btnShare = document.getElementById("share");
@@ -18,6 +17,7 @@ let grid = createEmptyGrid();
 let drawing = false;
 let drawValue = 1; // paint with 1 (mark)
 let cellW = 10, cellH = 10;
+let isReadOnly = false; // true when viewing a shared garden
 
 // Init
 function createEmptyGrid() {
@@ -65,7 +65,7 @@ function render() {
         }
       } else {
         // mark
-        ctx.fillStyle = "#6e4f38";
+        ctx.fillStyle = "#a98f7bff";
         ctx.fillRect(x, y, cellW, cellH);
       }
       // optional grid lines for pixel look
@@ -98,6 +98,7 @@ function toggleCell(r,c) {
 
 // Mouse / touch events
 canvas.addEventListener("pointerdown", (ev) => {
+  if (isReadOnly) return; // disable drawing in read-only mode
   ev.preventDefault();
   drawing = true;
   const cell = pointerToCell(ev.clientX, ev.clientY);
@@ -109,16 +110,18 @@ canvas.addEventListener("pointerdown", (ev) => {
   render();
 });
 canvas.addEventListener("pointermove", (ev) => {
-  if (!drawing) return;
+  if (!drawing || isReadOnly) return; // disable drawing in read-only mode
   const cell = pointerToCell(ev.clientX, ev.clientY);
   if (!cell) return;
   setCell(cell.r, cell.c, drawValue);
   render();
 });
 window.addEventListener("pointerup", () => {
-  if (drawing) {
+  if (drawing && !isReadOnly) { // only auto-save if not read-only
     drawing = false;
     autoSaveLocal(); // save after stroke
+  } else {
+    drawing = false;
   }
 });
 
@@ -126,12 +129,11 @@ window.addEventListener("pointerup", () => {
 canvas.addEventListener("contextmenu", (e) => e.preventDefault());
 
 // Buttons
-btnSaveLocal.addEventListener("click", () => {
-  saveToLocal();
-  shareResult.textContent = "Saved locally.";
-});
-
 btnClear.addEventListener("click", () => {
+  if (isReadOnly) {
+    shareResult.textContent = "Cannot clear in read-only mode.";
+    return;
+  }
   if (!confirm("Clear the garden?")) return;
   grid = createEmptyGrid();
   render();
@@ -140,6 +142,10 @@ btnClear.addEventListener("click", () => {
 });
 
 btnRandom.addEventListener("click", () => {
+  if (isReadOnly) {
+    shareResult.textContent = "Cannot randomize in read-only mode.";
+    return;
+  }
   randomizeGrid();
   render();
   saveToLocal();
@@ -147,6 +153,10 @@ btnRandom.addEventListener("click", () => {
 });
 
 btnShare.addEventListener("click", async () => {
+  if (isReadOnly) {
+    shareResult.textContent = "Cannot share in read-only mode.";
+    return;
+  }
   shareResult.textContent = "Sharing…";
   try {
     const res = await fetch("/api/garden", {
@@ -210,6 +220,10 @@ async function tryLoadFromUrl() {
   const match = path.match(/^\/garden\/([A-Za-z0-9-_]+)$/);
   if (!match) return false;
   const id = match[1];
+  
+  // Set read-only mode when viewing a shared garden
+  isReadOnly = true;
+  
   try {
     const res = await fetch(`/api/garden/${id}`);
     if (!res.ok) {
@@ -220,14 +234,31 @@ async function tryLoadFromUrl() {
     if (data && data.grid) {
       grid = data.grid;
       render();
-      saveToLocal(); // also cache locally
-      shareResult.textContent = `Loaded garden ${id}`;
+      // Don't save to localStorage when viewing shared gardens
+      shareResult.textContent = `Viewing shared garden ${id} (read-only)`;
+      updateUIForReadOnly();
       return true;
     }
   } catch (e) {
     console.error(e);
   }
   return false;
+}
+
+// Update UI for read-only mode
+function updateUIForReadOnly() {
+  // Disable buttons in read-only mode
+  btnClear.disabled = true;
+  btnRandom.disabled = true;
+  btnShare.disabled = true;
+  
+  // Update button text to indicate read-only state
+  btnClear.textContent = "Clear (disabled)";
+  btnRandom.textContent = "Random (disabled)";
+  btnShare.textContent = "Share (disabled)";
+  
+  // Update canvas cursor to indicate non-interactive state
+  canvas.style.cursor = "not-allowed";
 }
 
 // Boot
@@ -245,6 +276,10 @@ async function tryLoadFromUrl() {
     render();
   }
 
-  // autosave on unload
-  window.addEventListener("beforeunload", saveToLocal);
+  // autosave on unload (only if not read-only)
+  window.addEventListener("beforeunload", () => {
+    if (!isReadOnly) {
+      saveToLocal();
+    }
+  });
 })();
