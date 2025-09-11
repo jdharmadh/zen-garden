@@ -1,16 +1,20 @@
 const express = require("express");
 const path = require("path");
 const app = express();
+const cors = require("cors");
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
-
-// serve frontend
-app.use(express.static(path.join(__dirname, "../frontend")));
+app.use(cors());
 
 // in-memory "DB" for gardens
 const gardens = {};
 
+// serve frontend
+// Serve static files first
+app.use(express.static(path.join(__dirname, "../frontend")));
+
+// API routes should come before catch-all routes
 // save a garden
 app.post("/api/garden", (req, res) => {
   const id = Date.now().toString();
@@ -23,6 +27,11 @@ app.get("/api/garden/:id", (req, res) => {
   const garden = gardens[req.params.id];
   if (!garden) return res.status(404).json({ error: "Not found" });
   res.json(garden);
+});
+
+// Serve frontend for /garden/:id deep links (after API routes)
+app.get('/garden/:id', (req, res) => {
+  res.sendFile(path.join(__dirname, '../frontend/index.html'));
 });
 
 app.listen(PORT, () =>
