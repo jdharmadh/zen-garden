@@ -154,18 +154,46 @@ function getPlantAt(x, y) {
   return null;
 }
 
-function placePlant() {
-  const emptySpace = findRandomEmptySpace();
-  if (!emptySpace) {
-    shareResult.textContent = "No free space available for planting!";
+function placePlant(x, y) {
+  // Check if the specified location is free
+  if (!isSpaceFree(x - PLANT_SIZE / 2, y - PLANT_SIZE / 2, PLANT_SIZE, PLANT_SIZE)) {
+    shareResult.textContent = "Cannot place plant here - location conflicts with existing plant!";
     setTimeout(() => shareResult.textContent = "", 3000);
     return false;
   }
   
+  // Constrain to canvas bounds
+  const constrainedX = Math.max(0, Math.min(canvas.width - PLANT_SIZE, x - PLANT_SIZE / 2));
+  const constrainedY = Math.max(0, Math.min(canvas.height - PLANT_SIZE, y - PLANT_SIZE / 2));
+  
   const randomImageIndex = Math.floor(Math.random() * plantImages.length);
-  const newPlant = createPlant(emptySpace.x, emptySpace.y, randomImageIndex);
+  const newPlant = createPlant(constrainedX, constrainedY, randomImageIndex);
   plants.push(newPlant);
   return true;
+}
+
+function addRandomPlants() {
+  // Clear existing plants first
+  plants = [];
+  
+  // Add 3-5 random plants if plant images are loaded
+  if (plantImages.length === 0) return;
+  
+  const numPlants = 3 + Math.floor(Math.random() * 3); // 3-5 plants
+  let plantsAdded = 0;
+  let attempts = 0;
+  const maxAttempts = 50; // Prevent infinite loop
+  
+  while (plantsAdded < numPlants && attempts < maxAttempts) {
+    const space = findRandomEmptySpace();
+    if (space) {
+      const randomImageIndex = Math.floor(Math.random() * plantImages.length);
+      const newPlant = createPlant(space.x, space.y, randomImageIndex);
+      plants.push(newPlant);
+      plantsAdded++;
+    }
+    attempts++;
+  }
 }
 
 // Tool selection
@@ -344,6 +372,10 @@ function drawToolCursor() {
       const canvasX = (mousePos.x - rect.left) * (canvas.width / rect.width);
       const canvasY = (mousePos.y - rect.top) * (canvas.height / rect.height);
       
+      // Check if hovering over an existing plant - don't show cursor if so
+      const plantAtPoint = getPlantAt(canvasX, canvasY);
+      if (plantAtPoint) return; // Don't show cursor when hovering over existing plant
+      
       ctx.strokeStyle = 'rgba(0, 255, 0, 0.6)';
       ctx.lineWidth = 2;
       ctx.strokeRect(
@@ -499,7 +531,7 @@ canvas.addEventListener("pointerdown", (ev) => {
     }
     
     // Place a new plant
-    if (placePlant()) {
+    if (placePlant(canvasX, canvasY)) {
       render();
       autoSaveLocal();
       shareResult.textContent = "Plant placed!";
@@ -602,6 +634,7 @@ btnClear.addEventListener("click", () => {
   }
   if (!confirm("Clear the garden?")) return;
   grid = createEmptyGrid();
+  plants = []; // Clear all plants too
   render();
   saveToLocal();
   shareResult.textContent = "Cleared.";
@@ -613,6 +646,7 @@ btnRandom.addEventListener("click", () => {
     return;
   }
   randomizeGrid();
+  addRandomPlants(); // Add random plants after creating random grid
   render();
   saveToLocal();
   shareResult.textContent = "Random garden generated.";
