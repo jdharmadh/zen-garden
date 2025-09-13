@@ -8,19 +8,38 @@
 </head>
 <body>
   <header>
-    <h1>Zen Garden</h1>
+    <h1>zen garden</h1>
     <div class="controls">
-      <button id="clear">Clear</button>
-      <button id="randomize">Random</button>
-      <button id="share">Share (get link)</button>
+      <button id="clear">clear</button>
+      <button id="randomize">random</button>
+      <button id="share">share (get link)</button>
       <span id="shareResult" class="result"></span>
     </div>
   </header>
+
+  
 
   <main>
     <div class="canvas-wrap">
       <canvas id="garden"></canvas>
     </div>
+    <aside class="tools">
+    <h3>Tools</h3>
+    <div class="tool-buttons">
+      <button id="wandTool" class="tool-btn active" data-tool="wand">
+        <span class="tool-icon">🪄</span>
+        <span class="tool-name">Zen Wand</span>
+      </button>
+      <button id="smootherTool" class="tool-btn" data-tool="smoother">
+        <span class="tool-icon">🧽</span>
+        <span class="tool-name">Sand Smoother</span>
+      </button>
+      <button id="rakeTool" class="tool-btn" data-tool="rake">
+        <span class="tool-icon">🪚</span>
+        <span class="tool-name">Zen Rake</span>
+      </button>
+    </div>
+  </aside>
   </main>
 
   <script src="/script.js"></script>
