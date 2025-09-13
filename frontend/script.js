@@ -517,7 +517,8 @@ function applyRakeTool(r, c) {
     // Alternate between light and dark based on position and phase
     const isLight = (nc + rakePhase) % 2 === 0;
     cell.type = isLight ? 3 : 4; // raked light or dark
-    cell.variation = getRandomVariation();
+    // Apply more noticeable variation to dark blocks - use broader range like 0.6 to 1.0
+    cell.variation = isLight ? getRandomVariation() : (0.6 + Math.random() * 0.4);
   }
   rakePhase++; // Change phase for natural variation
 }
