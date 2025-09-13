@@ -9,7 +9,8 @@ const TOOLS = {
   WAND: 'wand',
   SMOOTHER: 'smoother', 
   RAKE: 'rake',
-  PLANT: 'plant'
+  PLANT: 'plant',
+  ROCK: 'rock'
 };
 
 // DOM
@@ -25,6 +26,7 @@ const wandBtn = document.getElementById("wandTool");
 const smootherBtn = document.getElementById("smootherTool");
 const rakeBtn = document.getElementById("rakeTool");
 const plantBtn = document.getElementById("plantTool");
+const rockBtn = document.getElementById("rockTool");
 
 // State: each cell can have type and intensity/color variation
 // cell format: { type: 0=sand, 1=mark, 2=smoothed, 3=raked_light, 4=raked_dark, variation: 0-1 }
@@ -36,12 +38,20 @@ let isReadOnly = false;
 let mousePos = { x: 0, y: 0 };
 let rakePhase = 0; // for alternating rake pattern
 
-// Plant system
-let plants = []; // Array of plant objects: { id, x, y, imageIndex, width, height, image }
+// Unified object system for plants and rocks
+let objects = []; // Array of object items: { id, x, y, type, imageIndex, width, height, image }
 let plantImages = []; // Pre-loaded plant images
-let draggedPlant = null; // Currently dragged plant
-let dragOffset = { x: 0, y: 0 }; // Offset from plant center when dragging
-const PLANT_SIZE = 80; // Default plant size (scaled from 480px originals)
+let rockImages = []; // Pre-loaded rock images
+let draggedObject = null; // Currently dragged object
+let dragOffset = { x: 0, y: 0 }; // Offset from object center when dragging
+const PLANT_SIZE = 60; // Default plant size (scaled from 480px originals)
+const ROCK_SIZE = 72; // Rock size (already 72x72 pixels)
+
+// Object types
+const OBJECT_TYPES = {
+  PLANT: 'plant',
+  ROCK: 'rock'
+};
 
 // Natural color variations - create randomness only once when cell is created
 function getRandomVariation() {
@@ -88,7 +98,7 @@ function getRakedDarkColor(variation = 1) {
   return `rgb(${Math.floor(base.r * v)}, ${Math.floor(base.g * v)}, ${Math.floor(base.b * v)})`;
 }
 
-// Plant management functions
+// Object management functions
 function loadPlantImages() {
   return Promise.all(
     Array.from({length: 10}, (_, i) => {
@@ -102,95 +112,130 @@ function loadPlantImages() {
   );
 }
 
-function createPlant(x, y, imageIndex) {
+function loadRockImages() {
+  return Promise.all(
+    Array.from({length: 6}, (_, i) => {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = reject;
+        img.src = `/images/rocks/rock${i + 1}.png`;
+      });
+    })
+  );
+}
+
+function createObject(x, y, type, imageIndex) {
+  const isPlant = type === OBJECT_TYPES.PLANT;
+  const images = isPlant ? plantImages : rockImages;
+  const size = isPlant ? PLANT_SIZE : ROCK_SIZE;
+  
   return {
     id: Date.now() + Math.random(), // unique ID
     x: x,
     y: y,
+    type: type,
     imageIndex: imageIndex,
-    width: PLANT_SIZE,
-    height: PLANT_SIZE,
-    image: plantImages[imageIndex]
+    width: size,
+    height: size,
+    image: images[imageIndex]
   };
 }
 
-function findRandomEmptySpace() {
+function findRandomEmptySpace(objectType) {
   const maxAttempts = 100;
+  const size = objectType === OBJECT_TYPES.PLANT ? PLANT_SIZE : ROCK_SIZE;
+  
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    const x = Math.random() * (canvas.width - PLANT_SIZE);
-    const y = Math.random() * (canvas.height - PLANT_SIZE);
+    const x = Math.random() * (canvas.width - size);
+    const y = Math.random() * (canvas.height - size);
     
-    if (isSpaceFree(x, y, PLANT_SIZE, PLANT_SIZE)) {
+    if (isSpaceFree(x, y, size, size)) {
       return { x, y };
     }
   }
   return null; // No free space found
 }
 
-function isSpaceFree(x, y, width, height, excludePlantId = null) {
-  // Check collision with other plants
-  for (const plant of plants) {
-    if (excludePlantId && plant.id === excludePlantId) continue;
+function isSpaceFree(x, y, width, height, excludeObjectId = null) {
+  // Check collision with other objects (both plants and rocks)
+  for (const obj of objects) {
+    if (excludeObjectId && obj.id === excludeObjectId) continue;
     
-    if (x < plant.x + plant.width &&
-        x + width > plant.x &&
-        y < plant.y + plant.height &&
-        y + height > plant.y) {
+    if (x < obj.x + obj.width &&
+        x + width > obj.x &&
+        y < obj.y + obj.height &&
+        y + height > obj.y) {
       return false; // Collision detected
     }
   }
   return true;
 }
 
-function getPlantAt(x, y) {
-  // Check plants in reverse order (top-most first)
-  for (let i = plants.length - 1; i >= 0; i--) {
-    const plant = plants[i];
-    if (x >= plant.x && x <= plant.x + plant.width &&
-        y >= plant.y && y <= plant.y + plant.height) {
-      return plant;
+function getObjectAt(x, y) {
+  // Check objects in reverse order (top-most first)
+  for (let i = objects.length - 1; i >= 0; i--) {
+    const obj = objects[i];
+    if (x >= obj.x && x <= obj.x + obj.width &&
+        y >= obj.y && y <= obj.y + obj.height) {
+      return obj;
     }
   }
   return null;
 }
 
-function placePlant(x, y) {
+function placeObject(x, y, objectType) {
+  const size = objectType === OBJECT_TYPES.PLANT ? PLANT_SIZE : ROCK_SIZE;
+  const images = objectType === OBJECT_TYPES.PLANT ? plantImages : rockImages;
+  
   // Check if the specified location is free
-  if (!isSpaceFree(x - PLANT_SIZE / 2, y - PLANT_SIZE / 2, PLANT_SIZE, PLANT_SIZE)) {
-    shareResult.textContent = "Cannot place plant here - location conflicts with existing plant!";
+  if (!isSpaceFree(x - size / 2, y - size / 2, size, size)) {
+    const objectName = objectType === OBJECT_TYPES.PLANT ? "plant" : "rock";
+    shareResult.textContent = `Cannot place ${objectName} here - location conflicts with existing object!`;
     setTimeout(() => shareResult.textContent = "", 3000);
     return false;
   }
   
   // Constrain to canvas bounds
-  const constrainedX = Math.max(0, Math.min(canvas.width - PLANT_SIZE, x - PLANT_SIZE / 2));
-  const constrainedY = Math.max(0, Math.min(canvas.height - PLANT_SIZE, y - PLANT_SIZE / 2));
+  const constrainedX = Math.max(0, Math.min(canvas.width - size, x - size / 2));
+  const constrainedY = Math.max(0, Math.min(canvas.height - size, y - size / 2));
   
-  const randomImageIndex = Math.floor(Math.random() * plantImages.length);
-  const newPlant = createPlant(constrainedX, constrainedY, randomImageIndex);
-  plants.push(newPlant);
+  const randomImageIndex = Math.floor(Math.random() * images.length);
+  const newObject = createObject(constrainedX, constrainedY, objectType, randomImageIndex);
+  objects.push(newObject);
   return true;
 }
 
-function addRandomPlants() {
-  // Clear existing plants first
-  plants = [];
+function addRandomObjects() {
+  // Clear existing objects first
+  objects = [];
   
   // Add 3-5 random plants if plant images are loaded
-  if (plantImages.length === 0) return;
+  if (plantImages.length > 0) {
+    const numPlants = 3 + Math.floor(Math.random() * 3); // 3-5 plants
+    addRandomObjectsOfType(OBJECT_TYPES.PLANT, numPlants);
+  }
   
-  const numPlants = 3 + Math.floor(Math.random() * 3); // 3-5 plants
-  let plantsAdded = 0;
+  // Add 2-4 random rocks if rock images are loaded
+  if (rockImages.length > 0) {
+    const numRocks = 2 + Math.floor(Math.random() * 3); // 2-4 rocks
+    addRandomObjectsOfType(OBJECT_TYPES.ROCK, numRocks);
+  }
+}
+
+function addRandomObjectsOfType(objectType, count) {
+  const images = objectType === OBJECT_TYPES.PLANT ? plantImages : rockImages;
+  let objectsAdded = 0;
   let attempts = 0;
   const maxAttempts = 50; // Prevent infinite loop
   
-  while (plantsAdded < numPlants && attempts < maxAttempts) {
-    const space = findRandomEmptySpace();
+  while (objectsAdded < count && attempts < maxAttempts) {
+    const space = findRandomEmptySpace(objectType);
     if (space) {
-      const randomImageIndex = Math.floor(Math.random() * plantImages.length);
-      const newPlant = createPlant(space.x, space.y, randomImageIndex);
-      plants.push(newPlant);
-      plantsAdded++;
+      const randomImageIndex = Math.floor(Math.random() * images.length);
+      const newObject = createObject(space.x, space.y, objectType, randomImageIndex);
+      objects.push(newObject);
+      objectsAdded++;
     }
     attempts++;
   }
@@ -218,6 +263,10 @@ function selectTool(tool) {
       plantBtn.classList.add('active');
       canvas.style.cursor = 'pointer';
       break;
+    case TOOLS.ROCK:
+      rockBtn.classList.add('active');
+      canvas.style.cursor = 'pointer';
+      break;
   }
 }
 
@@ -226,6 +275,7 @@ wandBtn.addEventListener('click', () => selectTool(TOOLS.WAND));
 smootherBtn.addEventListener('click', () => selectTool(TOOLS.SMOOTHER));
 rakeBtn.addEventListener('click', () => selectTool(TOOLS.RAKE));
 plantBtn.addEventListener('click', () => selectTool(TOOLS.PLANT));
+rockBtn.addEventListener('click', () => selectTool(TOOLS.ROCK));
 
 function resizeCanvasToDisplaySize() {
   const rect = canvas.getBoundingClientRect();
@@ -300,23 +350,23 @@ function render() {
     }
   }
   
-  // Draw plants on top of sand
-  drawPlants();
+  // Draw objects on top of sand
+  drawObjects();
   
   // Draw tool cursor overlay
   drawToolCursor();
 }
 
-// Draw all plants
-function drawPlants() {
-  for (const plant of plants) {
-    if (plant.image && plant.image.complete) {
+// Draw all objects (plants and rocks)
+function drawObjects() {
+  for (const obj of objects) {
+    if (obj.image && obj.image.complete) {
       ctx.drawImage(
-        plant.image,
-        plant.x,
-        plant.y,
-        plant.width,
-        plant.height
+        obj.image,
+        obj.x,
+        obj.y,
+        obj.width,
+        obj.height
       );
     }
   }
@@ -324,7 +374,7 @@ function drawPlants() {
 
 // Draw tool-specific cursor overlay
 function drawToolCursor() {
-  if (isReadOnly || draggedPlant) return; // Don't show cursor when dragging or in read-only
+  if (isReadOnly || draggedObject) return; // Don't show cursor when dragging or in read-only
   
   const cell = pointerToCell(mousePos.x, mousePos.y);
   if (!cell) return;
@@ -367,22 +417,26 @@ function drawToolCursor() {
       }
       break;
     case TOOLS.PLANT:
-      // Plant placement preview - show a circle where plant would be placed
+    case TOOLS.ROCK:
+      // Object placement preview - show a rectangle where object would be placed
       const rect = canvas.getBoundingClientRect();
       const canvasX = (mousePos.x - rect.left) * (canvas.width / rect.width);
       const canvasY = (mousePos.y - rect.top) * (canvas.height / rect.height);
       
-      // Check if hovering over an existing plant - don't show cursor if so
-      const plantAtPoint = getPlantAt(canvasX, canvasY);
-      if (plantAtPoint) return; // Don't show cursor when hovering over existing plant
+      // Check if hovering over an existing object - don't show cursor if so
+      const objectAtPoint = getObjectAt(canvasX, canvasY);
+      if (objectAtPoint) return; // Don't show cursor when hovering over existing object
       
-      ctx.strokeStyle = 'rgba(0, 255, 0, 0.6)';
+      const size = currentTool === TOOLS.PLANT ? PLANT_SIZE : ROCK_SIZE;
+      const color = currentTool === TOOLS.PLANT ? 'rgba(0, 255, 0, 0.6)' : 'rgba(139, 69, 19, 0.6)'; // green for plants, brown for rocks
+      
+      ctx.strokeStyle = color;
       ctx.lineWidth = 2;
       ctx.strokeRect(
-        canvasX - PLANT_SIZE / 2,
-        canvasY - PLANT_SIZE / 2,
-        PLANT_SIZE,
-        PLANT_SIZE
+        canvasX - size / 2,
+        canvasY - size / 2,
+        size,
+        size
       );
       break;
   }
@@ -502,39 +556,43 @@ canvas.addEventListener("pointerdown", (ev) => {
   const canvasX = (ev.clientX - rect.left) * (canvas.width / rect.width);
   const canvasY = (ev.clientY - rect.top) * (canvas.height / rect.height);
   
-  if (currentTool === TOOLS.PLANT) {
+  if (currentTool === TOOLS.PLANT || currentTool === TOOLS.ROCK) {
+    const objectType = currentTool === TOOLS.PLANT ? OBJECT_TYPES.PLANT : OBJECT_TYPES.ROCK;
+    
     // Check if shift key is pressed for deletion
     if (ev.shiftKey) {
-      const plantAtPoint = getPlantAt(canvasX, canvasY);
-      if (plantAtPoint) {
-        // Delete the plant
-        const index = plants.indexOf(plantAtPoint);
+      const objectAtPoint = getObjectAt(canvasX, canvasY);
+      if (objectAtPoint && objectAtPoint.type === objectType) {
+        // Delete the object (only if it matches the current tool type)
+        const index = objects.indexOf(objectAtPoint);
         if (index > -1) {
-          plants.splice(index, 1);
+          objects.splice(index, 1);
           render();
           autoSaveLocal();
-          shareResult.textContent = "Plant removed.";
+          const objectName = objectType === OBJECT_TYPES.PLANT ? "Plant" : "Rock";
+          shareResult.textContent = `${objectName} removed.`;
           setTimeout(() => shareResult.textContent = "", 2000);
         }
       }
       return;
     }
     
-    // Check if clicking on an existing plant to start dragging
-    const plantAtPoint = getPlantAt(canvasX, canvasY);
-    if (plantAtPoint) {
-      draggedPlant = plantAtPoint;
-      dragOffset.x = canvasX - plantAtPoint.x;
-      dragOffset.y = canvasY - plantAtPoint.y;
+    // Check if clicking on an existing object of the same type to start dragging
+    const objectAtPoint = getObjectAt(canvasX, canvasY);
+    if (objectAtPoint && objectAtPoint.type === objectType) {
+      draggedObject = objectAtPoint;
+      dragOffset.x = canvasX - objectAtPoint.x;
+      dragOffset.y = canvasY - objectAtPoint.y;
       canvas.style.cursor = 'grabbing';
       return;
     }
     
-    // Place a new plant
-    if (placePlant(canvasX, canvasY)) {
+    // Place a new object
+    if (placeObject(canvasX, canvasY, objectType)) {
       render();
       autoSaveLocal();
-      shareResult.textContent = "Plant placed!";
+      const objectName = objectType === OBJECT_TYPES.PLANT ? "Plant" : "Rock";
+      shareResult.textContent = `${objectName} placed!`;
       setTimeout(() => shareResult.textContent = "", 2000);
     }
     return;
@@ -569,19 +627,19 @@ canvas.addEventListener("pointermove", (ev) => {
   const canvasX = (ev.clientX - rect.left) * (canvas.width / rect.width);
   const canvasY = (ev.clientY - rect.top) * (canvas.height / rect.height);
   
-  // Handle plant dragging
-  if (draggedPlant && !isReadOnly) {
+  // Handle object dragging
+  if (draggedObject && !isReadOnly) {
     const newX = canvasX - dragOffset.x;
     const newY = canvasY - dragOffset.y;
     
     // Constrain to canvas bounds
-    const constrainedX = Math.max(0, Math.min(canvas.width - draggedPlant.width, newX));
-    const constrainedY = Math.max(0, Math.min(canvas.height - draggedPlant.height, newY));
+    const constrainedX = Math.max(0, Math.min(canvas.width - draggedObject.width, newX));
+    const constrainedY = Math.max(0, Math.min(canvas.height - draggedObject.height, newY));
     
-    // Check for collisions with other plants
-    if (isSpaceFree(constrainedX, constrainedY, draggedPlant.width, draggedPlant.height, draggedPlant.id)) {
-      draggedPlant.x = constrainedX;
-      draggedPlant.y = constrainedY;
+    // Check for collisions with other objects
+    if (isSpaceFree(constrainedX, constrainedY, draggedObject.width, draggedObject.height, draggedObject.id)) {
+      draggedObject.x = constrainedX;
+      draggedObject.y = constrainedY;
       render();
     }
     return;
@@ -611,9 +669,9 @@ canvas.addEventListener("pointermove", (ev) => {
 });
 
 window.addEventListener("pointerup", () => {
-  if (draggedPlant && !isReadOnly) {
-    draggedPlant = null;
-    canvas.style.cursor = currentTool === TOOLS.PLANT ? 'pointer' : 'default';
+  if (draggedObject && !isReadOnly) {
+    draggedObject = null;
+    canvas.style.cursor = (currentTool === TOOLS.PLANT || currentTool === TOOLS.ROCK) ? 'pointer' : 'default';
     autoSaveLocal();
   } else if (drawing && !isReadOnly) {
     drawing = false;
@@ -634,7 +692,7 @@ btnClear.addEventListener("click", () => {
   }
   if (!confirm("Clear the garden?")) return;
   grid = createEmptyGrid();
-  plants = []; // Clear all plants too
+  objects = []; // Clear all objects (plants and rocks)
   render();
   saveToLocal();
   shareResult.textContent = "Cleared.";
@@ -646,7 +704,7 @@ btnRandom.addEventListener("click", () => {
     return;
   }
   randomizeGrid();
-  addRandomPlants(); // Add random plants after creating random grid
+  addRandomObjects(); // Add random objects (plants and rocks) after creating random grid
   render();
   saveToLocal();
   shareResult.textContent = "Random garden generated.";
@@ -664,13 +722,14 @@ btnShare.addEventListener("click", async () => {
       row.map(cell => cell.type)
     );
     
-    // Convert plants to simplified format
-    const simplifiedPlants = plants.map(p => ({
-      x: p.x,
-      y: p.y,
-      imageIndex: p.imageIndex,
-      width: p.width,
-      height: p.height
+    // Convert objects to simplified format
+    const simplifiedObjects = objects.map(obj => ({
+      x: obj.x,
+      y: obj.y,
+      type: obj.type,
+      imageIndex: obj.imageIndex,
+      width: obj.width,
+      height: obj.height
     }));
     
     const res = await fetch("/api/garden", {
@@ -678,8 +737,8 @@ btnShare.addEventListener("click", async () => {
       headers: {"Content-Type":"application/json"},
       body: JSON.stringify({ 
         grid: simplifiedGrid,
-        plants: simplifiedPlants,
-        version: 4, // Increment version for plant support
+        objects: simplifiedObjects, // Now includes both plants and rocks
+        version: 5, // Increment version for rock support
         cols: CELL_COLS,
         rows: CELL_ROWS
       })
@@ -705,17 +764,18 @@ btnShare.addEventListener("click", async () => {
 function saveToLocal() {
   const payload = { 
     grid: grid, 
-    plants: plants.map(p => ({ // Save plants without image objects
-      id: p.id,
-      x: p.x,
-      y: p.y,
-      imageIndex: p.imageIndex,
-      width: p.width,
-      height: p.height
+    objects: objects.map(obj => ({ // Save objects without image objects
+      id: obj.id,
+      x: obj.x,
+      y: obj.y,
+      type: obj.type,
+      imageIndex: obj.imageIndex,
+      width: obj.width,
+      height: obj.height
     })),
     cols: CELL_COLS, 
     rows: CELL_ROWS, 
-    version: 3, // Increment version for plant support
+    version: 4, // Increment version for rock support
     ts: Date.now() 
   };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
@@ -740,14 +800,24 @@ function loadFromLocal() {
     if (data && data.grid) {
       grid = data.grid;
       
-      // Load plants if available
-      if (data.plants && plantImages.length > 0) {
-        plants = data.plants.map(p => ({
+      // Load objects if available (version 4+ has unified objects)
+      if (data.objects && (plantImages.length > 0 || rockImages.length > 0)) {
+        objects = data.objects.map(obj => {
+          const images = obj.type === OBJECT_TYPES.PLANT ? plantImages : rockImages;
+          return {
+            ...obj,
+            image: images[obj.imageIndex]
+          };
+        });
+      } else if (data.plants && plantImages.length > 0) {
+        // Handle legacy plant-only format (version 3)
+        objects = data.plants.map(p => ({
           ...p,
+          type: OBJECT_TYPES.PLANT,
           image: plantImages[p.imageIndex]
         }));
       } else {
-        plants = [];
+        objects = [];
       }
       
       return true;
@@ -818,8 +888,30 @@ async function tryLoadFromUrl() {
     const data = await res.json();
     if (data && data.grid) {
       // Handle different format versions
-      if (data.version === 4) {
-        // New format with plants support
+      if (data.version === 5) {
+        // New format with unified objects (plants and rocks)
+        grid = data.grid.map(row => 
+          row.map(cellType => ({
+            type: cellType,
+            variation: getRandomVariation()
+          }))
+        );
+        
+        // Load objects if available and images are loaded
+        if (data.objects && (plantImages.length > 0 || rockImages.length > 0)) {
+          objects = data.objects.map(obj => {
+            const images = obj.type === OBJECT_TYPES.PLANT ? plantImages : rockImages;
+            return {
+              ...obj,
+              id: Date.now() + Math.random(), // Generate new ID
+              image: images[obj.imageIndex]
+            };
+          });
+        } else {
+          objects = [];
+        }
+      } else if (data.version === 4) {
+        // Previous format with plants only
         grid = data.grid.map(row => 
           row.map(cellType => ({
             type: cellType,
@@ -829,13 +921,14 @@ async function tryLoadFromUrl() {
         
         // Load plants if available and images are loaded
         if (data.plants && plantImages.length > 0) {
-          plants = data.plants.map(p => ({
+          objects = data.plants.map(p => ({
             ...p,
             id: Date.now() + Math.random(), // Generate new ID
+            type: OBJECT_TYPES.PLANT,
             image: plantImages[p.imageIndex]
           }));
         } else {
-          plants = [];
+          objects = [];
         }
       } else if (data.version === 3) {
         // Previous simplified format - grid is 2D array of cell types only
@@ -845,11 +938,11 @@ async function tryLoadFromUrl() {
             variation: getRandomVariation()
           }))
         );
-        plants = []; // No plants in older versions
+        objects = []; // No objects in older versions
       } else if (data.version === 2) {
         // Previous format with full cell objects
         grid = data.grid;
-        plants = [];
+        objects = [];
       } else {
         // Convert legacy format (v1 and older)
         grid = data.grid.map(row => 
@@ -858,7 +951,7 @@ async function tryLoadFromUrl() {
             variation: getRandomVariation()
           }))
         );
-        plants = [];
+        objects = [];
       }
       render();
       shareResult.textContent = `Viewing shared garden ${id} (read-only)`;
@@ -901,13 +994,21 @@ function updateUIForReadOnly() {
   // Size canvas to container
   resizeCanvasToDisplaySize();
 
-  // Load plant images first
+  // Load plant and rock images first
   try {
     plantImages = await loadPlantImages();
     console.log(`Loaded ${plantImages.length} plant images`);
   } catch (error) {
     console.error("Failed to load plant images:", error);
     plantImages = [];
+  }
+  
+  try {
+    rockImages = await loadRockImages();
+    console.log(`Loaded ${rockImages.length} rock images`);
+  } catch (error) {
+    console.error("Failed to load rock images:", error);
+    rockImages = [];
   }
 
   // First try loading from URL
