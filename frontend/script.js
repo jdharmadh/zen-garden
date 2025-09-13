@@ -41,7 +41,7 @@ let plants = []; // Array of plant objects: { id, x, y, imageIndex, width, heigh
 let plantImages = []; // Pre-loaded plant images
 let draggedPlant = null; // Currently dragged plant
 let dragOffset = { x: 0, y: 0 }; // Offset from plant center when dragging
-const PLANT_SIZE = 96; // Default plant size (scaled from 480px originals)
+const PLANT_SIZE = 80; // Default plant size (scaled from 480px originals)
 
 // Natural color variations - create randomness only once when cell is created
 function getRandomVariation() {
