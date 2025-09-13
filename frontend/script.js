@@ -245,8 +245,8 @@ function applyWandTool(r, c) {
   if (r < 0 || r >= CELL_ROWS || c < 0 || c >= CELL_COLS) return;
   
   const cell = grid[r][c];
-  if (cell.type === 0) {
-    // Drawing on sand - create mark
+  if (cell.type === 0 || cell.type === 2 || cell.type === 3 || cell.type === 4) {
+    // Drawing on any type of sand (untouched, smoothed, or raked) - create mark
     cell.type = 1;
     cell.variation = getRandomVariation();
   } else if (cell.type === 1) {
