@@ -1,3 +1,10 @@
+@font-face {
+  font-family: 'Minecraftia';
+  src: url('/Minecraftia.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
 :root{
   --bg:#f4e9d6;   /* sand */
   --sand-dark:#e1cfae;
@@ -10,7 +17,7 @@
 html,body{height:100%}
 body{
   margin:0;
-  font-family:monospace;
+  font-family:'Minecraftia', monospace;
   background: linear-gradient(180deg, var(--bg), var(--sand-dark));
   color:#222;
   display:flex;
@@ -32,19 +39,21 @@ header{
 h1{font-size:18px;margin:0}
 .controls{display:flex;gap:8px;align-items:center}
 .controls button{
-  background:var(--ui-bg);
-  border:1px solid #ddd;
+  background:#3e2723;
+  border:1px solid #5d4037;
+  color:white;
   padding:8px 10px;
-  border-radius:8px;
+  border-radius:0;
   cursor:pointer;
   font-size:14px;
+  font-family:'Minecraftia', monospace;
 }
 .controls button:hover{box-shadow:0 1px 4px rgba(0,0,0,0.08)}
 .controls button:disabled{
-  background:#f5f5f5;
-  color:#999;
+  background:#5d4037;
+  color:#bcaaa4;
   cursor:not-allowed;
-  border-color:#e5e5e5;
+  border-color:#6d4c41;
 }
 .controls button:disabled:hover{box-shadow:none}
 .result{font-size:13px;margin-left:8px;color:#333;max-width:360px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -83,23 +92,27 @@ main{
   align-items:center;
   gap:10px;
   padding:12px;
-  border:2px solid #ddd;
-  border-radius:8px;
-  background:white;
+  border:2px solid #5d4037;
+  border-radius:0;
+  background:#3e2723;
+  color:white;
   cursor:pointer;
   transition:all 0.2s ease;
   font-size:14px;
+  font-family:'Minecraftia', monospace;
 }
 
 .tool-btn:hover{
-  border-color:#bbb;
-  box-shadow:0 2px 8px rgba(0,0,0,0.08);
+  border-color:#8d6e63;
+  background:#704d3e;
+  box-shadow:0 2px 8px rgba(0,0,0,0.3);
 }
 
 .tool-btn.active{
-  border-color:var(--accent);
-  background:#f0f8e8;
-  box-shadow:0 2px 8px rgba(107,142,35,0.15);
+  border-color:#8d6e63;
+  background:#c4876c;
+  color:white;
+  box-shadow:0 2px 8px rgba(0,0,0,0.4);
 }
 
 .tool-icon{
@@ -108,11 +121,11 @@ main{
 
 .tool-name{
   font-weight:500;
-  color:#333;
+  color:white;
 }
 
 .tool-btn.active .tool-name{
-  color:var(--accent);
+  color:white;
 }
 
 .canvas-wrap{
