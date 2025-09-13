@@ -14,6 +14,9 @@ const gardens = {};
 // Serve static files first
 app.use(express.static(path.join(__dirname, "../frontend")));
 
+// Serve images from the images directory
+app.use('/images', express.static(path.join(__dirname, "../images")));
+
 // API routes should come before catch-all routes
 // save a garden
 app.post("/api/garden", (req, res) => {

@@ -8,7 +8,8 @@ const STORAGE_KEY = "zenGarden_v2";
 const TOOLS = {
   WAND: 'wand',
   SMOOTHER: 'smoother', 
-  RAKE: 'rake'
+  RAKE: 'rake',
+  PLANT: 'plant'
 };
 
 // DOM
@@ -23,6 +24,7 @@ const shareResult = document.getElementById("shareResult");
 const wandBtn = document.getElementById("wandTool");
 const smootherBtn = document.getElementById("smootherTool");
 const rakeBtn = document.getElementById("rakeTool");
+const plantBtn = document.getElementById("plantTool");
 
 // State: each cell can have type and intensity/color variation
 // cell format: { type: 0=sand, 1=mark, 2=smoothed, 3=raked_light, 4=raked_dark, variation: 0-1 }
@@ -33,6 +35,13 @@ let cellW = 10, cellH = 10;
 let isReadOnly = false;
 let mousePos = { x: 0, y: 0 };
 let rakePhase = 0; // for alternating rake pattern
+
+// Plant system
+let plants = []; // Array of plant objects: { id, x, y, imageIndex, width, height, image }
+let plantImages = []; // Pre-loaded plant images
+let draggedPlant = null; // Currently dragged plant
+let dragOffset = { x: 0, y: 0 }; // Offset from plant center when dragging
+const PLANT_SIZE = 96; // Default plant size (scaled from 480px originals)
 
 // Natural color variations - create randomness only once when cell is created
 function getRandomVariation() {
@@ -79,6 +88,86 @@ function getRakedDarkColor(variation = 1) {
   return `rgb(${Math.floor(base.r * v)}, ${Math.floor(base.g * v)}, ${Math.floor(base.b * v)})`;
 }
 
+// Plant management functions
+function loadPlantImages() {
+  return Promise.all(
+    Array.from({length: 10}, (_, i) => {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = reject;
+        img.src = `/images/plants/plant${i + 1}.png`;
+      });
+    })
+  );
+}
+
+function createPlant(x, y, imageIndex) {
+  return {
+    id: Date.now() + Math.random(), // unique ID
+    x: x,
+    y: y,
+    imageIndex: imageIndex,
+    width: PLANT_SIZE,
+    height: PLANT_SIZE,
+    image: plantImages[imageIndex]
+  };
+}
+
+function findRandomEmptySpace() {
+  const maxAttempts = 100;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const x = Math.random() * (canvas.width - PLANT_SIZE);
+    const y = Math.random() * (canvas.height - PLANT_SIZE);
+    
+    if (isSpaceFree(x, y, PLANT_SIZE, PLANT_SIZE)) {
+      return { x, y };
+    }
+  }
+  return null; // No free space found
+}
+
+function isSpaceFree(x, y, width, height, excludePlantId = null) {
+  // Check collision with other plants
+  for (const plant of plants) {
+    if (excludePlantId && plant.id === excludePlantId) continue;
+    
+    if (x < plant.x + plant.width &&
+        x + width > plant.x &&
+        y < plant.y + plant.height &&
+        y + height > plant.y) {
+      return false; // Collision detected
+    }
+  }
+  return true;
+}
+
+function getPlantAt(x, y) {
+  // Check plants in reverse order (top-most first)
+  for (let i = plants.length - 1; i >= 0; i--) {
+    const plant = plants[i];
+    if (x >= plant.x && x <= plant.x + plant.width &&
+        y >= plant.y && y <= plant.y + plant.height) {
+      return plant;
+    }
+  }
+  return null;
+}
+
+function placePlant() {
+  const emptySpace = findRandomEmptySpace();
+  if (!emptySpace) {
+    shareResult.textContent = "No free space available for planting!";
+    setTimeout(() => shareResult.textContent = "", 3000);
+    return false;
+  }
+  
+  const randomImageIndex = Math.floor(Math.random() * plantImages.length);
+  const newPlant = createPlant(emptySpace.x, emptySpace.y, randomImageIndex);
+  plants.push(newPlant);
+  return true;
+}
+
 // Tool selection
 function selectTool(tool) {
   currentTool = tool;
@@ -97,6 +186,10 @@ function selectTool(tool) {
       rakeBtn.classList.add('active');
       canvas.style.cursor = 'grab';
       break;
+    case TOOLS.PLANT:
+      plantBtn.classList.add('active');
+      canvas.style.cursor = 'pointer';
+      break;
   }
 }
 
@@ -104,6 +197,7 @@ function selectTool(tool) {
 wandBtn.addEventListener('click', () => selectTool(TOOLS.WAND));
 smootherBtn.addEventListener('click', () => selectTool(TOOLS.SMOOTHER));
 rakeBtn.addEventListener('click', () => selectTool(TOOLS.RAKE));
+plantBtn.addEventListener('click', () => selectTool(TOOLS.PLANT));
 
 function resizeCanvasToDisplaySize() {
   const rect = canvas.getBoundingClientRect();
@@ -178,13 +272,31 @@ function render() {
     }
   }
   
+  // Draw plants on top of sand
+  drawPlants();
+  
   // Draw tool cursor overlay
   drawToolCursor();
 }
 
+// Draw all plants
+function drawPlants() {
+  for (const plant of plants) {
+    if (plant.image && plant.image.complete) {
+      ctx.drawImage(
+        plant.image,
+        plant.x,
+        plant.y,
+        plant.width,
+        plant.height
+      );
+    }
+  }
+}
+
 // Draw tool-specific cursor overlay
 function drawToolCursor() {
-  if (isReadOnly) return;
+  if (isReadOnly || draggedPlant) return; // Don't show cursor when dragging or in read-only
   
   const cell = pointerToCell(mousePos.x, mousePos.y);
   if (!cell) return;
@@ -225,6 +337,21 @@ function drawToolCursor() {
           cellH * 0.8
         );
       }
+      break;
+    case TOOLS.PLANT:
+      // Plant placement preview - show a circle where plant would be placed
+      const rect = canvas.getBoundingClientRect();
+      const canvasX = (mousePos.x - rect.left) * (canvas.width / rect.width);
+      const canvasY = (mousePos.y - rect.top) * (canvas.height / rect.height);
+      
+      ctx.strokeStyle = 'rgba(0, 255, 0, 0.6)';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(
+        canvasX - PLANT_SIZE / 2,
+        canvasY - PLANT_SIZE / 2,
+        PLANT_SIZE,
+        PLANT_SIZE
+      );
       break;
   }
 }
@@ -338,8 +465,51 @@ canvas.addEventListener('mouseleave', () => {
 canvas.addEventListener("pointerdown", (ev) => {
   if (isReadOnly) return;
   ev.preventDefault();
-  drawing = true;
   
+  const rect = canvas.getBoundingClientRect();
+  const canvasX = (ev.clientX - rect.left) * (canvas.width / rect.width);
+  const canvasY = (ev.clientY - rect.top) * (canvas.height / rect.height);
+  
+  if (currentTool === TOOLS.PLANT) {
+    // Check if shift key is pressed for deletion
+    if (ev.shiftKey) {
+      const plantAtPoint = getPlantAt(canvasX, canvasY);
+      if (plantAtPoint) {
+        // Delete the plant
+        const index = plants.indexOf(plantAtPoint);
+        if (index > -1) {
+          plants.splice(index, 1);
+          render();
+          autoSaveLocal();
+          shareResult.textContent = "Plant removed.";
+          setTimeout(() => shareResult.textContent = "", 2000);
+        }
+      }
+      return;
+    }
+    
+    // Check if clicking on an existing plant to start dragging
+    const plantAtPoint = getPlantAt(canvasX, canvasY);
+    if (plantAtPoint) {
+      draggedPlant = plantAtPoint;
+      dragOffset.x = canvasX - plantAtPoint.x;
+      dragOffset.y = canvasY - plantAtPoint.y;
+      canvas.style.cursor = 'grabbing';
+      return;
+    }
+    
+    // Place a new plant
+    if (placePlant()) {
+      render();
+      autoSaveLocal();
+      shareResult.textContent = "Plant placed!";
+      setTimeout(() => shareResult.textContent = "", 2000);
+    }
+    return;
+  }
+  
+  // Handle sand tools
+  drawing = true;
   const cell = pointerToCell(ev.clientX, ev.clientY);
   if (!cell) return;
   
@@ -363,6 +533,28 @@ canvas.addEventListener("pointermove", (ev) => {
   mousePos.x = ev.clientX;
   mousePos.y = ev.clientY;
   
+  const rect = canvas.getBoundingClientRect();
+  const canvasX = (ev.clientX - rect.left) * (canvas.width / rect.width);
+  const canvasY = (ev.clientY - rect.top) * (canvas.height / rect.height);
+  
+  // Handle plant dragging
+  if (draggedPlant && !isReadOnly) {
+    const newX = canvasX - dragOffset.x;
+    const newY = canvasY - dragOffset.y;
+    
+    // Constrain to canvas bounds
+    const constrainedX = Math.max(0, Math.min(canvas.width - draggedPlant.width, newX));
+    const constrainedY = Math.max(0, Math.min(canvas.height - draggedPlant.height, newY));
+    
+    // Check for collisions with other plants
+    if (isSpaceFree(constrainedX, constrainedY, draggedPlant.width, draggedPlant.height, draggedPlant.id)) {
+      draggedPlant.x = constrainedX;
+      draggedPlant.y = constrainedY;
+      render();
+    }
+    return;
+  }
+  
   if (!drawing || isReadOnly) {
     return; // Don't update cursor during drawing
   }
@@ -370,7 +562,7 @@ canvas.addEventListener("pointermove", (ev) => {
   const cell = pointerToCell(ev.clientX, ev.clientY);
   if (!cell) return;
   
-  // Apply current tool
+  // Apply current sand tool
   switch(currentTool) {
     case TOOLS.WAND:
       applyWandTool(cell.r, cell.c);
@@ -387,7 +579,11 @@ canvas.addEventListener("pointermove", (ev) => {
 });
 
 window.addEventListener("pointerup", () => {
-  if (drawing && !isReadOnly) {
+  if (draggedPlant && !isReadOnly) {
+    draggedPlant = null;
+    canvas.style.cursor = currentTool === TOOLS.PLANT ? 'pointer' : 'default';
+    autoSaveLocal();
+  } else if (drawing && !isReadOnly) {
     drawing = false;
     autoSaveLocal();
   } else {
@@ -434,12 +630,22 @@ btnShare.addEventListener("click", async () => {
       row.map(cell => cell.type)
     );
     
+    // Convert plants to simplified format
+    const simplifiedPlants = plants.map(p => ({
+      x: p.x,
+      y: p.y,
+      imageIndex: p.imageIndex,
+      width: p.width,
+      height: p.height
+    }));
+    
     const res = await fetch("/api/garden", {
       method: "POST",
       headers: {"Content-Type":"application/json"},
       body: JSON.stringify({ 
         grid: simplifiedGrid,
-        version: 3, // Increment version for new format
+        plants: simplifiedPlants,
+        version: 4, // Increment version for plant support
         cols: CELL_COLS,
         rows: CELL_ROWS
       })
@@ -465,9 +671,17 @@ btnShare.addEventListener("click", async () => {
 function saveToLocal() {
   const payload = { 
     grid: grid, 
+    plants: plants.map(p => ({ // Save plants without image objects
+      id: p.id,
+      x: p.x,
+      y: p.y,
+      imageIndex: p.imageIndex,
+      width: p.width,
+      height: p.height
+    })),
     cols: CELL_COLS, 
     rows: CELL_ROWS, 
-    version: 2,
+    version: 3, // Increment version for plant support
     ts: Date.now() 
   };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
@@ -489,8 +703,19 @@ function loadFromLocal() {
   }
   try {
     const data = JSON.parse(raw);
-    if (data && data.grid && data.version === 2) {
+    if (data && data.grid) {
       grid = data.grid;
+      
+      // Load plants if available
+      if (data.plants && plantImages.length > 0) {
+        plants = data.plants.map(p => ({
+          ...p,
+          image: plantImages[p.imageIndex]
+        }));
+      } else {
+        plants = [];
+      }
+      
       return true;
     }
   } catch(e){}
@@ -559,17 +784,38 @@ async function tryLoadFromUrl() {
     const data = await res.json();
     if (data && data.grid) {
       // Handle different format versions
-      if (data.version === 3) {
-        // New simplified format - grid is 2D array of cell types only
+      if (data.version === 4) {
+        // New format with plants support
         grid = data.grid.map(row => 
           row.map(cellType => ({
             type: cellType,
             variation: getRandomVariation()
           }))
         );
+        
+        // Load plants if available and images are loaded
+        if (data.plants && plantImages.length > 0) {
+          plants = data.plants.map(p => ({
+            ...p,
+            id: Date.now() + Math.random(), // Generate new ID
+            image: plantImages[p.imageIndex]
+          }));
+        } else {
+          plants = [];
+        }
+      } else if (data.version === 3) {
+        // Previous simplified format - grid is 2D array of cell types only
+        grid = data.grid.map(row => 
+          row.map(cellType => ({
+            type: cellType,
+            variation: getRandomVariation()
+          }))
+        );
+        plants = []; // No plants in older versions
       } else if (data.version === 2) {
         // Previous format with full cell objects
         grid = data.grid;
+        plants = [];
       } else {
         // Convert legacy format (v1 and older)
         grid = data.grid.map(row => 
@@ -578,6 +824,7 @@ async function tryLoadFromUrl() {
             variation: getRandomVariation()
           }))
         );
+        plants = [];
       }
       render();
       shareResult.textContent = `Viewing shared garden ${id} (read-only)`;
@@ -619,6 +866,15 @@ function updateUIForReadOnly() {
   
   // Size canvas to container
   resizeCanvasToDisplaySize();
+
+  // Load plant images first
+  try {
+    plantImages = await loadPlantImages();
+    console.log(`Loaded ${plantImages.length} plant images`);
+  } catch (error) {
+    console.error("Failed to load plant images:", error);
+    plantImages = [];
+  }
 
   // First try loading from URL
   const loadedFromUrl = await tryLoadFromUrl();
