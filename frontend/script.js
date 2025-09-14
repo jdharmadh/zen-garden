@@ -18,8 +18,14 @@ const canvas = document.getElementById("garden");
 const ctx = canvas.getContext("2d", { willReadFrequently: false });
 const btnClear = document.getElementById("clear");
 const btnRandom = document.getElementById("randomize");
-const btnShare = document.getElementById("share");
 const shareResult = document.getElementById("shareResult");
+
+// New toolbar elements
+const shareToolbarBtn = document.getElementById("shareToolbar");
+const shareResultToolbar = document.getElementById("shareResultToolbar");
+const createOwnBtn = document.getElementById("createOwn");
+const editModeActions = document.getElementById("editModeActions");
+const readOnlyActions = document.getElementById("readOnlyActions");
 
 // Tool buttons
 const wandBtn = document.getElementById("wandTool");
@@ -65,6 +71,38 @@ function createEmptyGrid() {
       variation: getRandomVariation() 
     }))
   );
+}
+
+// Copy link to clipboard function
+function copyToClipboard(text) {
+  navigator.clipboard.writeText(text).then(() => {
+    // Show temporary feedback
+    const copyBtn = document.getElementById('copyLinkBtn');
+    if (copyBtn) {
+      const originalText = copyBtn.textContent;
+      copyBtn.textContent = 'Copied!';
+      copyBtn.disabled = true;
+    }
+  }).catch(err => {
+    console.error('Failed to copy link:', err);
+    // Fallback for older browsers
+    const textArea = document.createElement('textarea');
+    textArea.value = text;
+    document.body.appendChild(textArea);
+    textArea.select();
+    try {
+      document.execCommand('copy');
+      const copyBtn = document.getElementById('copyLinkBtn');
+      if (copyBtn) {
+        const originalText = copyBtn.textContent;
+        copyBtn.textContent = 'Copied!';
+        copyBtn.disabled = true;
+      }
+    } catch (fallbackErr) {
+      console.error('Fallback copy failed:', fallbackErr);
+    }
+    document.body.removeChild(textArea);
+  });
 }
 
 // Natural color generators - using fixed variation, no random sampling on each call
@@ -744,12 +782,13 @@ btnRandom.addEventListener("click", () => {
   shareResult.textContent = "Random garden generated.";
 });
 
-btnShare.addEventListener("click", async () => {
+// New toolbar share button event listener
+shareToolbarBtn.addEventListener("click", async () => {
   if (isReadOnly) {
-    shareResult.textContent = "Cannot share in read-only mode.";
+    shareResultToolbar.textContent = "Cannot share in read-only mode.";
     return;
   }
-  shareResult.textContent = "Sharing…";
+  shareResultToolbar.textContent = "Sharing…";
   try {
     // Convert grid to simplified format (only cell types)
     const simplifiedGrid = grid.map(row => 
@@ -784,14 +823,19 @@ btnShare.addEventListener("click", async () => {
     const link = j.link ? j.link : (j.id ? `/garden/${j.id}` : null);
     if (link) {
       const full = window.location.origin + link;
-      shareResult.innerHTML = `Shareable link: <a href="${full}" target="_blank">${full}</a>`;
+      shareResultToolbar.innerHTML = `Saved! <button id="copyLinkBtn" style="width: 100px;" onclick="copyToClipboard('${full}')">Copy Link</button>`;
     } else {
-      shareResult.textContent = "Saved but no link returned.";
+      shareResultToolbar.textContent = "Saved but no link returned.";
     }
   } catch (err) {
     console.error(err);
-    shareResult.textContent = "Share failed (is the backend running?).";
+    shareResultToolbar.textContent = "Share failed (is the backend running?).";
   }
+});
+
+// Create own garden button event listener
+createOwnBtn.addEventListener("click", () => {
+  window.location.href = "/";
 });
 
 // Enhanced localStorage with new format
@@ -999,22 +1043,25 @@ async function tryLoadFromUrl() {
 }
 
 // Update UI for read-only mode
+// Update UI for read-only mode
 function updateUIForReadOnly() {
   // Disable buttons in read-only mode
   btnClear.disabled = true;
   btnRandom.disabled = true;
-  btnShare.disabled = true;
   
   // Update button text to indicate read-only state
   btnClear.textContent = "Clear (disabled)";
   btnRandom.textContent = "Random (disabled)";
-  btnShare.textContent = "Share (disabled)";
   
   // Disable tool buttons
   document.querySelectorAll('.tool-btn').forEach(btn => {
     btn.disabled = true;
     btn.style.opacity = '0.5';
   });
+  
+  // Show read-only actions, hide edit mode actions
+  editModeActions.style.display = 'none';
+  readOnlyActions.style.display = 'block';
   
   // Update canvas cursor to indicate non-interactive state
   canvas.style.cursor = "not-allowed";

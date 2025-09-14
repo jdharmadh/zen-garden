@@ -41,6 +41,21 @@
         <span class="tool-name">Rock Editor</span>
       </button>
     </div>
+    
+    <div class="action-section">
+      <!-- Content changes based on read-only vs edit mode -->
+      <div id="editModeActions" class="mode-actions">
+        <h4>Share</h4>
+        <button id="shareToolbar">Get Shareable Link</button>
+        <div id="shareResultToolbar" class="share-result"></div>
+      </div>
+      
+      <div id="readOnlyActions" class="mode-actions" style="display: none;">
+        <h4>Create Your Own</h4>
+        <p>This is a shared garden in read-only mode.</p>
+        <button id="createOwn">Create Your Own Garden</button>
+      </div>
+    </div>
   </aside>
   <div class="tool-directions">
     <p id="toolInstructions">Drag to create flowing marks in the sand.</p>
@@ -49,7 +64,6 @@
   <div class="controls">
     <button id="clear">clear</button>
     <button id="randomize">random</button>
-    <button id="share">share (get link)</button>
     <span id="shareResult" class="result"></span>
     </div>
   </main>
