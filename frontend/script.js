@@ -34,6 +34,40 @@ const rakeBtn = document.getElementById("rakeTool");
 const plantBtn = document.getElementById("plantTool");
 const rockBtn = document.getElementById("rockTool");
 
+// Responsive elements
+const responsiveMessage = document.getElementById("responsiveMessage");
+const mainContent = document.getElementById("mainContent");
+
+// Responsive check function
+function checkResponsive() {
+  const minWidth = 1024;
+  const minHeight = 690;
+  const currentWidth = window.innerWidth;
+  const currentHeight = window.innerHeight;
+  
+  // Update the message content with current screen size
+  const messageContent = document.querySelector('.message-content');
+  if (messageContent) {
+    const isWidthTooSmall = currentWidth < minWidth;
+    const isHeightTooSmall = currentHeight < minHeight;
+    
+    messageContent.innerHTML = `
+      <h2>Please Use Fullscreen</h2>
+      <p>This zen garden experience requires a minimum screen size of 1024×690 pixels.</p>
+      <p><strong>Your current screen size:</strong> ${currentWidth}×${currentHeight} pixels</p>
+      <p>Please expand your browser window or use a larger device.</p>
+    `;
+  }
+  
+  if (currentWidth < minWidth || currentHeight < minHeight) {
+    responsiveMessage.style.display = 'flex';
+    mainContent.style.display = 'none';
+  } else {
+    responsiveMessage.style.display = 'none';
+    mainContent.style.display = 'flex';
+  }
+}
+
 // State: each cell can have type and intensity/color variation
 // cell format: { type: 0=sand, 1=mark, 2=smoothed, 3=raked_light, 4=raked_dark, variation: 0-1 }
 let grid = createEmptyGrid();
@@ -51,7 +85,7 @@ let rockImages = []; // Pre-loaded rock images
 let draggedObject = null; // Currently dragged object
 let dragOffset = { x: 0, y: 0 }; // Offset from object center when dragging
 const PLANT_SIZE = 60; // Default plant size (scaled from 480px originals)
-const ROCK_SIZE = 72; // Rock size (already 72x72 pixels)
+const ROCK_SIZE = 64; // Rock size (already 72x72 pixels)
 
 // Object types
 const OBJECT_TYPES = {
@@ -144,7 +178,7 @@ function loadPlantImages() {
         const img = new Image();
         img.onload = () => resolve(img);
         img.onerror = reject;
-        img.src = `/images/plants/plant${i + 1}.png`;
+        img.src = `../images/plants/plant${i + 1}.png`;
       });
     })
   );
@@ -157,7 +191,7 @@ function loadRockImages() {
         const img = new Image();
         img.onload = () => resolve(img);
         img.onerror = reject;
-        img.src = `/images/rocks/rock${i + 1}.png`;
+        img.src = `../images/rocks/rock${i + 1}.png`;
       });
     })
   );
@@ -346,7 +380,10 @@ function resizeCanvasToDisplaySize() {
   render();
 }
 
-window.addEventListener("resize", resizeCanvasToDisplaySize);
+window.addEventListener("resize", () => {
+  checkResponsive();
+  resizeCanvasToDisplaySize();
+});
 
 // Enhanced rendering with natural variations
 function render() {
@@ -1069,6 +1106,9 @@ function updateUIForReadOnly() {
 
 // Enhanced boot sequence
 (async function boot(){
+  // Check responsive requirements first
+  checkResponsive();
+  
   // Initialize tool selection
   selectTool(TOOLS.WAND);
   
