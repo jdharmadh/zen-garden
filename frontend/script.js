@@ -191,7 +191,7 @@ function placeObject(x, y, objectType) {
   // Check if the specified location is free
   if (!isSpaceFree(x - size / 2, y - size / 2, size, size)) {
     const objectName = objectType === OBJECT_TYPES.PLANT ? "plant" : "rock";
-    shareResult.textContent = `Cannot place ${objectName} here - location conflicts with existing object!`;
+    shareResult.textContent = `Cannot place ${objectName} here!`;
     setTimeout(() => shareResult.textContent = "", 3000);
     return false;
   }
@@ -431,21 +431,46 @@ function drawToolCursor() {
       const canvasX = (mousePos.x - rect.left) * (canvas.width / rect.width);
       const canvasY = (mousePos.y - rect.top) * (canvas.height / rect.height);
       
-      // Check if hovering over an existing object - don't show cursor if so
-      const objectAtPoint = getObjectAt(canvasX, canvasY);
-      if (objectAtPoint) return; // Don't show cursor when hovering over existing object
-      
       const size = currentTool === TOOLS.PLANT ? PLANT_SIZE : ROCK_SIZE;
-      const color = currentTool === TOOLS.PLANT ? 'rgba(0, 255, 0, 0.6)' : 'rgba(139, 69, 19, 0.6)'; // green for plants, brown for rocks
+      const objectType = currentTool === TOOLS.PLANT ? OBJECT_TYPES.PLANT : OBJECT_TYPES.ROCK;
+      const placementX = canvasX - size / 2;
+      const placementY = canvasY - size / 2;
       
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 2;
-      ctx.strokeRect(
-        canvasX - size / 2,
-        canvasY - size / 2,
-        size,
-        size
-      );
+      // Check if hovering over a draggable object of the same type
+      const objectAtPoint = getObjectAt(canvasX, canvasY);
+      if (objectAtPoint && objectAtPoint.type === objectType) {
+        // Draw cyan square around draggable object
+        ctx.strokeStyle = 'rgba(0, 255, 255, 0.8)'; // cyan
+        ctx.lineWidth = 3;
+        ctx.strokeRect(objectAtPoint.x, objectAtPoint.y, objectAtPoint.width, objectAtPoint.height);
+      } else {
+        // Check if placement would conflict with existing objects
+        const wouldConflict = !isSpaceFree(placementX, placementY, size, size);
+        
+        if (wouldConflict) {
+          // Draw red X for conflict
+          ctx.strokeStyle = 'rgba(255, 0, 0, 0.8)';
+          ctx.lineWidth = 3;
+          const centerX = canvasX;
+          const centerY = canvasY;
+          const crossSize = size * 0.3;
+          
+          // Draw X
+          ctx.beginPath();
+          ctx.moveTo(centerX - crossSize, centerY - crossSize);
+          ctx.lineTo(centerX + crossSize, centerY + crossSize);
+          ctx.moveTo(centerX + crossSize, centerY - crossSize);
+          ctx.lineTo(centerX - crossSize, centerY + crossSize);
+          ctx.stroke();
+        } else {
+          // Draw placement preview rectangle
+          const color = currentTool === TOOLS.PLANT ? 'rgba(0, 255, 0, 0.6)' : 'rgba(139, 69, 19, 0.6)'; // green for plants, brown for rocks
+          
+          ctx.strokeStyle = color;
+          ctx.lineWidth = 2;
+          ctx.strokeRect(placementX, placementY, size, size);
+        }
+      }
       break;
   }
 }
