@@ -246,26 +246,34 @@ function selectTool(tool) {
   currentTool = tool;
   document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active'));
   
+  // Update tool instructions
+  const toolInstructions = document.getElementById('toolInstructions');
+  
   switch(tool) {
     case TOOLS.WAND:
       wandBtn.classList.add('active');
       canvas.style.cursor = 'crosshair';
+      toolInstructions.textContent = 'Drag to create flowing marks in the sand.';
       break;
     case TOOLS.SMOOTHER:
       smootherBtn.classList.add('active');
       canvas.style.cursor = 'grab';
+      toolInstructions.textContent = 'Drag to smooth and blend the sand.';
       break;
     case TOOLS.RAKE:
       rakeBtn.classList.add('active');
       canvas.style.cursor = 'grab';
+      toolInstructions.textContent = 'Drag to create light and dark rake patterns.';
       break;
     case TOOLS.PLANT:
       plantBtn.classList.add('active');
       canvas.style.cursor = 'pointer';
+      toolInstructions.textContent = 'Click to place plants. Drag to move, shift-click to delete.';
       break;
     case TOOLS.ROCK:
       rockBtn.classList.add('active');
       canvas.style.cursor = 'pointer';
+      toolInstructions.textContent = 'Click to place rocks. Drag to move, shift-click to delete.';
       break;
   }
 }
