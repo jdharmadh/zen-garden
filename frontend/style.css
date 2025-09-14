@@ -18,7 +18,8 @@ html,body{height:100%}
 body{
   margin:0;
   font-family:'Minecraftia', monospace;
-  background: linear-gradient(180deg, var(--bg), var(--sand-dark));
+  /* background: linear-gradient(180deg, var(--bg), var(--sand-dark)); */
+  background: url('/images/wood.jpg') center/cover no-repeat;
   color:#222;
   display:flex;
   flex-direction:column;
