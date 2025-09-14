@@ -178,7 +178,7 @@ function loadPlantImages() {
         const img = new Image();
         img.onload = () => resolve(img);
         img.onerror = reject;
-        img.src = `../images/plants/plant${i + 1}.png`;
+        img.src = `/zengarden/images/plants/plant${i + 1}.png`;
       });
     })
   );
@@ -191,7 +191,7 @@ function loadRockImages() {
         const img = new Image();
         img.onload = () => resolve(img);
         img.onerror = reject;
-        img.src = `../images/rocks/rock${i + 1}.png`;
+        img.src = `/zengarden/images/rocks/rock${i + 1}.png`;
       });
     })
   );
