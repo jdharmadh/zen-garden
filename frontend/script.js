@@ -857,7 +857,7 @@ shareToolbarBtn.addEventListener("click", async () => {
       throw new Error(`HTTP ${res.status}`);
     }
     const j = await res.json();
-    const link = j.link ? j.link : (j.id ? `/garden/${j.id}` : null);
+    const link = j.link ? j.link : (j.id ? `/zengarden/${j.id}` : null);
     if (link) {
       const full = window.location.origin + link;
       shareResultToolbar.innerHTML = `Saved! <button id="copyLinkBtn" style="width: 100px;" onclick="copyToClipboard('${full}')">Copy Link</button>`;
@@ -872,7 +872,7 @@ shareToolbarBtn.addEventListener("click", async () => {
 
 // Create own garden button event listener
 createOwnBtn.addEventListener("click", () => {
-  window.location.href = "/";
+  window.location.href = "/zengarden";
 });
 
 // Enhanced localStorage with new format
@@ -988,7 +988,7 @@ function randomizeGrid(density = 0.08) {
 // Enhanced URL loading with new format support
 async function tryLoadFromUrl() {
   const path = window.location.pathname;
-  const match = path.match(/^\/garden\/([A-Za-z0-9-_]+)$/);
+  const match = path.match(/^\/zengarden\/([A-Za-z0-9-_]+)$/);
   if (!match) return false;
   const id = match[1];
   
